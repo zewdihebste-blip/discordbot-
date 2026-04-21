@@ -1,0 +1,54 @@
+import discord
+from discord.ext import tasks
+import time
+
+TOKEN = "MTQ5MzU5NDIwMzQzMzg2MTI2MA.GlN90B.3sot_ljuxfJYstbbZVK3Yr3LudtZTuMCT0OKw8"
+STATUS_CHANNEL_NAME = "status"
+
+ROLES_TO_SHOW = ["1b", "300m", "100m", "50m", "10m"]
+
+intents = discord.Intents.default()
+intents.members = True
+client = discord.Client(intents=intents)
+
+status_message = None
+
+def build_message(guild):
+    lines = ["**📊 Role Status**\n"]
+    for role_name in ROLES_TO_SHOW:
+        role = discord.utils.get(guild.roles, name=role_name)
+        if role:
+            count = len(role.members)
+            lines.append(f"**@{role.name}** • {count} members")
+        else:
+            lines.append(f"**@{role_name}** • רול לא נמצא")
+    lines.append(f"\n🕐 Last Updated | <t:{int(time.time())}:T>")
+    return "\n".join(lines)
+
+@client.event
+async def on_ready():
+    global status_message
+    print(f"בוט פעיל: {client.user}")
+    guild = client.guilds[0]
+    channel = discord.utils.get(guild.text_channels, name=STATUS_CHANNEL_NAME)
+    async for msg in channel.history(limit=20):
+        if msg.author == client.user:
+            status_message = msg
+            break
+    if not status_message:
+        status_message = await channel.send(build_message(guild))
+    update_status.start()
+
+@tasks.loop(minutes=5)
+async def update_status():
+    global status_message
+    guild = client.guilds[0]
+    await status_message.edit(content=build_message(guild))
+
+@client.event
+async def on_member_update(before, after):
+    if before.roles != after.roles:
+        guild = after.guild
+        await status_message.edit(content=build_message(guild))
+
+client.run(TOKEN)
